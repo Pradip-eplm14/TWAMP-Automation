@@ -13,6 +13,10 @@ import re
 import time
 from playwright.sync_api import sync_playwright
 
+# Number of leading JHK data rows (the rows right under the header) that are removed
+# before JHK is appended to BIH. BIH is kept exactly as downloaded.
+JHK_ROWS_TO_REMOVE = 7
+
 MYCOM_URL = "https://welcome-page-pm-eaaprod.apps.mycom1.airtel.com/"
 DOWNLOAD_DIR = Path(r"C:\TWAMP_Automation\Downloads")
 DOWNLOAD_DIR.mkdir(parents=True, exist_ok=True)
@@ -561,14 +565,28 @@ def main():
                     if any(value is not None for value in row)
                 )
                 jhk_count = 0
+                removed_rows = []
 
-                for row in ws_jhk.iter_rows(min_row=2, values_only=True):
+                for row_index, row in enumerate(ws_jhk.iter_rows(min_row=2, values_only=True)):
+                    # Remove the first JHK_ROWS_TO_REMOVE rows below the header.
+                    if row_index < JHK_ROWS_TO_REMOVE:
+                        removed_rows.append(row)
+                        continue
                     if any(value is not None for value in row):
                         ws_bih.append(row)
                         jhk_count += 1
 
+                print(f"{sheet_name}: removed the first {len(removed_rows)} JHK "
+                      f"row(s) below the header before consolidation:")
+                for removed in removed_rows:
+                    print("    ", [value for value in removed[:6]])
+                if len(removed_rows) < JHK_ROWS_TO_REMOVE:
+                    print(f"WARNING: {sheet_name} JHK has only {len(removed_rows)} "
+                          f"data row(s); fewer than {JHK_ROWS_TO_REMOVE} could be removed.")
+
                 print(f"{sheet_name}: BIH={bih_count}, "
-                      f"JHK={jhk_count}, total={bih_count + jhk_count}")
+                      f"JHK={jhk_count} (after removing {len(removed_rows)}), "
+                      f"total={bih_count + jhk_count}")
 
             if TEMP_SOURCE.exists():
                 TEMP_SOURCE.unlink()
